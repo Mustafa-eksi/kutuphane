@@ -22,7 +22,7 @@ function kitapkaydet(ad, basimyil, sayfa, kategori) {
 
 function kitaplarigor() {
     return new Promise((res,rej)=>{
-        db.all("select * from kitaplar", [], (err, rows)=>{
+        db.all("select * from kitaplar where varmi is NULL", [], (err, rows)=>{
             if(err) {
                 rej(err.message);
                 return console.error(err.message);
@@ -40,6 +40,75 @@ function AuthenticateAsAdmin(kullaniciadi, parola) {
                 return console.error(err.message);
             }
             res(rows[0]["count(*)"] === 1);
+        })
+    })
+}
+
+function KullaniciKayitliMi(tc) {
+    return new Promise((res,rej)=>{
+        db.all("select count(*) from kullanicilar where tc=?", [tc], (err, rows)=>{
+            if(err) {
+                rej(err);
+            }else {
+                res(rows[0]["count(*)"] === 1)
+            }
+        })
+    })
+}
+
+function KitapKayitliMi(kitapid) {
+    return new Promise((res,rej)=>{
+        db.all("select count(*) from kitaplar where kitapid=?", [kitapid], (err, rows)=>{
+            if(err) {
+                rej(err);
+            }else {
+                res(rows[0]["count(*)"] === 1)
+            }
+        })
+    })
+}
+
+function Zimmetle(kullaniciadi, parola, tc, kitapid, teslimtarihi, sil) {
+    return new Promise((res,rej)=>{
+        AuthenticateAsAdmin(kullaniciadi, parola).then((v)=>{
+            if(v) {
+            KitapKayitliMi(kitapid).then((v)=>{
+                if(v){
+                    if(sil === true) {//silme işlemini zimmet işlemine dönüştürmek için tcyi sıfır teslimtarihini null giriyorum
+                        db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (0,?,?,NULL,'silindi')", [kitapid, new Date(Date.now()).toLocaleString()], (err)=>{
+                            if(err) {
+                                rej(err);
+                            }else{
+                                res()
+                            }
+                        })
+                    }else {
+                        KullaniciKayitliMi(tc).then((v)=>{
+                            if(v) {
+                                db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (?,?,?,?,'verildi')", [tc, kitapid, new Date(Date.now()).toLocaleString(), teslimtarihi], (err)=>{
+                                    if(err) {
+                                        rej(err);
+                                    }else{
+                                        res()
+                                    }
+                                })
+                            }else {
+                                rej("Kullanıcı kayıtlı değil")
+                            }
+                        }).catch((err)=>{rej(err)})
+                    }
+                }else{
+                    rej("Kitap kayıtlı değil.")
+                }
+            }).catch((err)=>{if(err) {rej(err)}})
+                    
+            }else {
+                rej("Giriş bilgileri yanlış.")
+            }
+        }).catch((err)=>{
+            if(err) {
+                rej(err);
+            }
         })
     })
 }
@@ -96,6 +165,56 @@ app.post('/kitapkaydet', (req, res)=>{ // req.body = {kullaniciadi:"", parola:""
             return;
         }
     })
+})
+
+app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", kitapid:1}
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid)) {
+        res.status(400);
+        res.send("Girilen bilgiler yanlış");
+        return;
+    }else {
+        AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
+            if(v){
+                db.all("select count(*) from kitaplar where kitapid=? and varmi is NULL", [req.body.kitapid], (err,rows) =>{
+                    if(err) {
+                        res.status(400);
+                        res.send("Girilen kitapid yanlış");
+                        return console.error(err.message);
+                    }else {
+                        if(rows[0]["count(*)"] == 1) {
+                            db.run("update kitaplar set varmi='yok' where kitapid=?", [req.body.kitapid], (err2)=>{
+                                if(err2) {
+                                    res.status(400);
+                                    res.send("Girilen kitapid yanlış");
+                                    return console.error(err2.message);
+                                }else {
+                                    Zimmetle(req.body.kullaniciadi, req.body.parola, 0, req.body.kitapid, "", true).then(()=>{
+                                        res.status(200);
+                                        res.send("Başarıyla kitap silindi");
+                                        return;
+                                    }).catch((err)=>{if(err){
+                                        res.status(500);
+                                        res.send(err);
+                                        return console.error(err);
+                                    }});
+                                }
+                            })
+                        }
+                    }
+                })
+            }else {
+                res.status(400);
+                res.send("Giriş bilgileri yanlış");
+                return;
+            }
+        }).catch((err)=>{
+            if(err) {
+                res.status(500);
+                res.send(err);
+                return console.error(err);
+            }
+        })
+    }
 })
 
 app.listen(port, () => {

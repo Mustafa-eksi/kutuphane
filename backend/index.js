@@ -88,18 +88,20 @@ function KitapKimde(kitapid) {
 
 function TeslimEt(kitapid) {
     return new Promise((res,rej)=>{
-        db.all("select * from zimmetislemleri where kitapid=? and teslimdurumu='verildi'", [], (err, rows)=>{
+        db.all("select * from zimmetislemleri where kitapid=? and teslimdurumu='verildi'", [kitapid], (err, rows)=>{
             if(err){
                 rej(err.message);
             }else {
                 if(rows[0]) {
-                    db.run("update zimmetislemleri set teslimdurumu='teslim' where kitapid=? and teslimdurumu='verildi'", (err)=>{
+                    db.run("update zimmetislemleri set teslimdurumu='teslim', gercekteslimtarihi=? where kitapid=? and teslimdurumu='verildi'", [new Date(Date.now()).toLocaleString(), kitapid], (err)=>{
                         if(err){
                             rej(err.message);
                         }else{
                             res();
                         }
                     })
+                }else {
+                    rej("Kitap birine zimmetli değil")
                 }
             }
         })
@@ -154,7 +156,12 @@ function ResErr(res, code, err) {
         res.send(err);
         console.error(err);
     }
-} 
+}
+
+function ResSuc(res, msg){
+    res.status(200);
+    res.send(msg);
+}
 
 app.get('/', (req, res)=>{ // Connection test
     res.send("OK")
@@ -254,25 +261,28 @@ app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", k
 
 app.post('/zimmetle', async (req, res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid) || !req.body.tc || isNaN(req.body.tc) || !req.body.teslimtarihi) {
-        res.status(400);
-        res.send("Girilen bilgiler yanlış");
-    }else {
-        AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
-            if(v){
-                Zimmetle(req.body.kullaniciadi, req.body.parola, req.body.tc, req.body.kitapid, req.body.teslimtarihi, false).then(()=>{
-                    res.status(200);
-                    res.send("Başarıyla kitap zimmetlendi");
-                    return;
-                }).catch((err)=>ResErr(res, 400, err))
-            }else {
-                return ResErr(res, 400, "Giriş bilgileri yanlış");
-            }
-        }).catch((err)=>ResErr(res, 500, err))
+        return ResErr(res, 400, "Girilen bilgiler yanlış");
     }
+    AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
+        if(v){
+            Zimmetle(req.body.kullaniciadi, req.body.parola, req.body.tc, req.body.kitapid, req.body.teslimtarihi, false).then(()=>{
+                res.status(200);
+                res.send("Başarıyla kitap zimmetlendi");
+                return;
+            }).catch((err)=>ResErr(res, 400, err))
+        }else {
+            return ResErr(res, 400, "Giriş bilgileri yanlış");
+        }
+    }).catch((err)=>ResErr(res, 500, err))
 })
 
 app.post("/teslimet", (req,res)=>{
-
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid) || !req.body.tc || isNaN(req.body.tc)) {
+        return ResErr(res, 400, "Girilen bilgiler yanlış");
+    }
+    TeslimEt(req.body.kitapid).then(()=>{
+        ResSuc(res, "Başarıyla teslim alındı.")
+    }).catch((err)=>ResErr(res, 400, err))
 })
 
 app.listen(port, () => {

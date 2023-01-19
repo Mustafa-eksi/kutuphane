@@ -50,7 +50,7 @@ function KullaniciKayitliMi(tc) {
             if(err) {
                 rej(err);
             }else {
-                res(rows[0]["count(*)"] === 1)
+                res(rows[0]["count(*)"] === 1);
             }
         })
     })
@@ -58,11 +58,47 @@ function KullaniciKayitliMi(tc) {
 
 function KitapKayitliMi(kitapid) {
     return new Promise((res,rej)=>{
-        db.all("select count(*) from kitaplar where kitapid=?", [kitapid], (err, rows)=>{
+        db.all("select count(*) from kitaplar where kitapid=? and varmi is NULL", [kitapid], (err, rows)=>{
             if(err) {
                 rej(err);
             }else {
                 res(rows[0]["count(*)"] === 1)
+            }
+        })
+    })
+}
+
+function KitapKimde(kitapid) {
+    return new Promise((res,rej)=>{
+        db.all("select * from zimmetislemleri where kitapid=? and teslimdurumu='verildi'", [], (err, rows)=>{
+            if(err){
+                rej(err.message);
+            }else {
+                if(rows[0]){
+                    res(rows[0]["tc"])
+                }else{
+                    res(null)
+                }
+            }
+        })
+    })
+}
+
+function TeslimEt(kitapid) {
+    return new Promise((res,rej)=>{
+        db.all("select * from zimmetislemleri where kitapid=? and teslimdurumu='verildi'", [], (err, rows)=>{
+            if(err){
+                rej(err.message);
+            }else {
+                if(rows[0]) {
+                    db.run("update zimmetislemleri set teslimdurumu='teslim' where kitapid=? and teslimdurumu='verildi'", (err)=>{
+                        if(err){
+                            rej(err.message);
+                        }else{
+                            res();
+                        }
+                    })
+                }
             }
         })
     })
@@ -85,11 +121,21 @@ function Zimmetle(kullaniciadi, parola, tc, kitapid, teslimtarihi, sil) {
                     }else {
                         KullaniciKayitliMi(tc).then((v)=>{
                             if(v) {
-                                db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (?,?,?,?,'verildi')", [tc, kitapid, new Date(Date.now()).toLocaleString(), teslimtarihi], (err)=>{
+                                KitapKimde(kitapid).then((v)=>{
+                                    if(v) { // Kitap zaten birine verilmiş daha teslim edilmemiş
+                                        rej("Kitap daha teslim edilmemiş");
+                                    }else { // Kitap teslim edilmiş
+                                        db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (?,?,?,?,'verildi')", [tc, kitapid, new Date(Date.now()).toLocaleString(), teslimtarihi], (err)=>{
+                                            if(err) {
+                                                rej(err.message);
+                                            }else{
+                                                res();
+                                            }
+                                        })
+                                    }
+                                }).catch((err)=>{
                                     if(err) {
                                         rej(err);
-                                    }else{
-                                        res()
                                     }
                                 })
                             }else {
@@ -175,33 +221,25 @@ app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", k
     }else {
         AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
             if(v){
-                db.all("select count(*) from kitaplar where kitapid=? and varmi is NULL", [req.body.kitapid], (err,rows) =>{
-                    if(err) {
-                        res.status(400);
-                        res.send("Girilen kitapid yanlış");
-                        return console.error(err.message);
-                    }else {
-                        if(rows[0]["count(*)"] == 1) {
-                            db.run("update kitaplar set varmi='yok' where kitapid=?", [req.body.kitapid], (err2)=>{
-                                if(err2) {
-                                    res.status(400);
-                                    res.send("Girilen kitapid yanlış");
-                                    return console.error(err2.message);
-                                }else {
-                                    Zimmetle(req.body.kullaniciadi, req.body.parola, 0, req.body.kitapid, "", true).then(()=>{
-                                        res.status(200);
-                                        res.send("Başarıyla kitap silindi");
-                                        return;
-                                    }).catch((err)=>{if(err){
-                                        res.status(500);
-                                        res.send(err);
-                                        return console.error(err);
-                                    }});
-                                }
-                            })
+                if(rows[0]["count(*)"] == 1) {
+                    db.run("update kitaplar set varmi='yok' where kitapid=?", [req.body.kitapid], (err2)=>{
+                        if(err2) {
+                            res.status(400);
+                            res.send("Girilen kitapid yanlış");
+                            return console.error(err2.message);
+                        }else {
+                            Zimmetle(req.body.kullaniciadi, req.body.parola, 0, req.body.kitapid, "", true).then(()=>{
+                                res.status(200);
+                                res.send("Başarıyla kitap silindi");
+                                return;
+                            }).catch((err)=>{if(err){
+                                res.status(500);
+                                res.send(err);
+                                return console.error(err);
+                            }});
                         }
-                    }
-                })
+                    })
+                }
             }else {
                 res.status(400);
                 res.send("Giriş bilgileri yanlış");
@@ -215,6 +253,39 @@ app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", k
             }
         })
     }
+})
+
+app.post('/zimmetle', (req, res)=>{
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid) || !req.body.tc || isNaN(req.body.tc) || !req.body.teslimtarihi) {
+        res.status(400);
+        res.send("Girilen bilgiler yanlış");
+    }else {
+        AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
+            if(v){
+                Zimmetle(req.body.kullaniciadi, req.body.parola, req.body.tc, req.body.kitapid, req.body.teslimtarihi, false).then(()=>{
+                    res.status(200);
+                    res.send("Başarıyla kitap zimmetlendi");
+                    return;
+                }).catch((err)=>{if(err) {
+                    res.status(500);
+                    res.send(err);
+                    return console.error(err);
+                }})
+            }else {
+                res.status(400);
+                res.send("Giriş bilgileri yanlış");
+                return;
+            }
+        }).catch((err)=>{if(err) {
+            res.status(500);
+            res.send(err);
+            return console.error(err);
+        }})
+    }
+})
+
+app.post("/teslimet", (req,res)=>{
+
 })
 
 app.listen(port, () => {

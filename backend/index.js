@@ -70,14 +70,16 @@ function KitapKayitliMi(kitapid) {
 
 function KitapKimde(kitapid) {
     return new Promise((res,rej)=>{
-        db.all("select * from zimmetislemleri where kitapid=? and teslimdurumu='verildi'", [], (err, rows)=>{
+        db.all("select * from zimmetislemleri where kitapid=? and teslimdurumu='verildi'", [kitapid], (err, rows)=>{
             if(err){
                 rej(err.message);
             }else {
                 if(rows[0]){
+                    console.log("1 -> ", rows)
                     res(rows[0]["tc"])
                 }else{
-                    res(null)
+                    console.log("2 -> ", rows)
+                    res(false)
                 }
             }
         })
@@ -106,51 +108,38 @@ function TeslimEt(kitapid) {
 
 function Zimmetle(kullaniciadi, parola, tc, kitapid, teslimtarihi, sil) {
     return new Promise((res,rej)=>{
-        AuthenticateAsAdmin(kullaniciadi, parola).then((v)=>{
-            if(v) {
-            KitapKayitliMi(kitapid).then((v)=>{
-                if(v){
-                    if(sil === true) {//silme işlemini zimmet işlemine dönüştürmek için tcyi sıfır teslimtarihini null giriyorum
-                        db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (0,?,?,NULL,'silindi')", [kitapid, new Date(Date.now()).toLocaleString()], (err)=>{
+        AuthenticateAsAdmin(kullaniciadi, parola).then((v1)=>{
+            if(!v1) return rej("Giriş bilgileri yanlış.")
+            KitapKayitliMi(kitapid).then((v2)=>{
+                if(!v2) return rej("Kitap kayıtlı değil.")
+                if(sil === true) {//silme işlemini zimmet işlemine dönüştürmek için tcyi sıfır teslimtarihini null giriyorum
+                    db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (0,?,?,NULL,'silindi')", [kitapid, new Date(Date.now()).toLocaleString()], (err)=>{
+                        if(err) {
+                            rej(err);
+                        }else{
+                            res()
+                        }
+                    })
+                }else {
+                    KullaniciKayitliMi(tc).then((v3)=>{
+                        if(!v3) return rej("Kullanıcı kayıtlı değil")
+                        KitapKimde(kitapid).then((v4)=>{
+                            if(v4) return rej("Kitap daha teslim edilmemiş");
+                            db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (?,?,?,?,'verildi')", [tc, kitapid, new Date(Date.now()).toLocaleString(), teslimtarihi], (err)=>{
+                                if(err) {
+                                    rej(err.message);
+                                }else{
+                                    res();
+                                }
+                            })
+                        }).catch((err)=>{
                             if(err) {
                                 rej(err);
-                            }else{
-                                res()
                             }
                         })
-                    }else {
-                        KullaniciKayitliMi(tc).then((v)=>{
-                            if(v) {
-                                KitapKimde(kitapid).then((v)=>{
-                                    if(v) { // Kitap zaten birine verilmiş daha teslim edilmemiş
-                                        rej("Kitap daha teslim edilmemiş");
-                                    }else { // Kitap teslim edilmiş
-                                        db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (?,?,?,?,'verildi')", [tc, kitapid, new Date(Date.now()).toLocaleString(), teslimtarihi], (err)=>{
-                                            if(err) {
-                                                rej(err.message);
-                                            }else{
-                                                res();
-                                            }
-                                        })
-                                    }
-                                }).catch((err)=>{
-                                    if(err) {
-                                        rej(err);
-                                    }
-                                })
-                            }else {
-                                rej("Kullanıcı kayıtlı değil")
-                            }
-                        }).catch((err)=>{rej(err)})
-                    }
-                }else{
-                    rej("Kitap kayıtlı değil.")
+                    }).catch((err)=>{rej(err)})
                 }
             }).catch((err)=>{if(err) {rej(err)}})
-                    
-            }else {
-                rej("Giriş bilgileri yanlış.")
-            }
         }).catch((err)=>{
             if(err) {
                 rej(err);
@@ -158,6 +147,14 @@ function Zimmetle(kullaniciadi, parola, tc, kitapid, teslimtarihi, sil) {
         })
     })
 }
+
+function ResErr(res, code, err) {
+    if(err) {
+        res.status(code);
+        res.send(err);
+        console.error(err);
+    }
+} 
 
 app.get('/', (req, res)=>{ // Connection test
     res.send("OK")
@@ -255,7 +252,7 @@ app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", k
     }
 })
 
-app.post('/zimmetle', (req, res)=>{
+app.post('/zimmetle', async (req, res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid) || !req.body.tc || isNaN(req.body.tc) || !req.body.teslimtarihi) {
         res.status(400);
         res.send("Girilen bilgiler yanlış");
@@ -266,21 +263,11 @@ app.post('/zimmetle', (req, res)=>{
                     res.status(200);
                     res.send("Başarıyla kitap zimmetlendi");
                     return;
-                }).catch((err)=>{if(err) {
-                    res.status(500);
-                    res.send(err);
-                    return console.error(err);
-                }})
+                }).catch((err)=>ResErr(res, 400, err))
             }else {
-                res.status(400);
-                res.send("Giriş bilgileri yanlış");
-                return;
+                return ResErr(res, 400, "Giriş bilgileri yanlış");
             }
-        }).catch((err)=>{if(err) {
-            res.status(500);
-            res.send(err);
-            return console.error(err);
-        }})
+        }).catch((err)=>ResErr(res, 500, err))
     }
 })
 

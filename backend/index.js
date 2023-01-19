@@ -5,6 +5,7 @@ const port = 8080;
 const db = new sql.Database("./kutuphane.db", sql.OPEN_READWRITE, (err)=>{
     if(err) return console.error(err.message);
 });
+const debugMode = true;
 
 app.use(express.json());
 
@@ -48,7 +49,7 @@ function KullaniciKayitliMi(tc) {
     return new Promise((res,rej)=>{
         db.all("select count(*) from kullanicilar where tc=?", [tc], (err, rows)=>{
             if(err) {
-                rej(err);
+                rej(err.message);
             }else {
                 res(rows[0]["count(*)"] === 1);
             }
@@ -150,15 +151,38 @@ function Zimmetle(kullaniciadi, parola, tc, kitapid, teslimtarihi, sil) {
     })
 }
 
+function KisiKaydet(tc, isimsoyisim, telefon, okul) {
+    return new Promise((res,rej)=>{
+        KullaniciKayitliMi(tc).then((v)=>{
+            if(v === true) {
+                return rej("Kişi zaten kayıtlı");
+            }
+            db.run("insert into kullanicilar (tc,isimsoyisim,telefon,okul) values (?,?,?,?)", [tc, isimsoyisim, telefon, okul], (err)=>{
+                if(err){
+                    rej(err)
+                }else {
+                    res();
+                }
+            })
+        }).catch((err)=>rej(err))
+    })
+}
+
 function ResErr(res, code, err) {
+    if(res.headersSent)
+        return;
     if(err) {
         res.status(code);
         res.send(err);
-        console.error(err);
+        if(debugMode) {
+            console.error(err);
+        }
     }
 }
 
 function ResSuc(res, msg){
+    if(res.headersSent)
+        return;
     res.status(200);
     res.send(msg);
 }
@@ -277,12 +301,91 @@ app.post('/zimmetle', async (req, res)=>{
 })
 
 app.post("/teslimet", (req,res)=>{
-    if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid) || !req.body.tc || isNaN(req.body.tc)) {
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid)) {
         return ResErr(res, 400, "Girilen bilgiler yanlış");
     }
     TeslimEt(req.body.kitapid).then(()=>{
         ResSuc(res, "Başarıyla teslim alındı.")
     }).catch((err)=>ResErr(res, 400, err))
+})
+
+app.post("/kisikaydet",(req,res)=>{
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.tc || isNaN(req.body.tc) || !req.body.isimsoyisim || !req.body.telefon || isNaN(req.body.telefon) || !req.body.okul) {
+        return ResErr(res, 400, "Girilen bilgiler yanlış");
+    }
+    AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
+        if(!v) {
+            return ResErr(res, 400, "Giriş bilgileri yanlış");
+        }
+        KisiKaydet(req.body.tc, req.body.isimsoyisim, req.body.telefon, req.body.okul).then(()=>{
+            ResSuc(res, "Kişi başarıyla kaydedildi")
+        }).catch((err)=>ResErr(res, 500, err))
+    }).catch((err)=>ResErr(res,500,err))
+})
+
+app.post("/kisisil", (req,res)=>{
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.tc || isNaN(req.body.tc)) {
+        return ResErr(res, 400, "Girilen bilgiler yanlış");
+    }
+    AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
+        if(!v) {
+            return ResErr(res, 400, "Giriş bilgileri yanlış");
+        }
+        db.run("delete from kullanicilar where tc=?", [req.body.tc], (err)=>{
+            if(err) {
+                ResErr(res, 500, err.message)
+            }else {
+                ResSuc(res, "Kişi Başarıyla silindi")
+            }
+        })
+    }).catch((err)=>ResErr(res,500,err))
+})
+
+// Bunun bir tek kullanım alanı var o da kişi kaydedilirken bir verinin yanlış girilmesi veya girilen verilerin geçerliliğini kaybetmesidir (mesela kişinin telefon numarasının değişmesi durumunda "telefon" kısmı değişebilmelidir). Bu yüzden tc değiştirilmek istendiğinde zimmetleme işlemlerinde kayıtlı eski tcleri de değiştirecek ve böylece kişinin zimmetislemleri'ndeki kayıtları bozulmayacaktır.
+/*Bu endpointte req için kullaniciadi, parola ve tc zorunlu ancak yenitc, yeniisimsoyisim, yenitelefon, yeniokul alanları zorunlu değildir (bu alanlardan en az biri mutlaka mevcut olmalıdır). Zorunlu olmayan alanlardan mevcut olanları kişinin verisini değiştirecektir.
+*/
+const zorunsuz = ["yenitc", "yeniisimsoyisim", "yenitelefon", "yeniokul"];
+app.post("/kisiduzenle", (req,res)=>{
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.tc || isNaN(req.body.tc)) {
+        return ResErr(res, 400, "Girilen bilgiler yanlış");
+    }
+    AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then(async (v)=>{
+        if(!v) {
+            return ResErr(res, 400, "Giriş bilgileri yanlış");
+        }
+        let mevcutkayitlimi = await KullaniciKayitliMi(req.body.tc).catch((err)=>{ResErr(res, 500, err)});
+        if(!mevcutkayitlimi) {
+            return ResErr(res, 400, "Girdiğiniz kullanıcı tcsi kayıtlı değil")
+        }
+        let soruisaretleri = [];
+        let aradaki="";
+        zorunsuz.forEach((va)=>{
+            if(req.body[va]) {
+                aradaki = aradaki + (aradaki.length !== 0 ? "," : "") + va.substring(4,va.length) + "=?" // zorunsuzdan aldığımız string'in ilk 4 harfini çıkararak değiştirilecek olan sütunu elde ediyoruz.
+                soruisaretleri.push(req.body[va])
+            }
+        })
+        if(aradaki === "") {
+            return ResErr(res, 400, "Kullanıcıda değiştirilecek bilgiler girilmemiş")
+        }
+        soruisaretleri.push(req.body.tc);
+        db.run("update kullanicilar set "+aradaki+" where tc=?", soruisaretleri, (err)=>{
+            if(err) {
+                if(err.message === "SQLITE_CONSTRAINT: UNIQUE constraint failed: kullanicilar.tc")
+                    return ResErr(res, 400, "Yeni tc zaten kayıtlı")
+                return ResErr(res, 500, err.message)
+            }else {
+                if(req.body[zorunsuz[0]]) { // Tc değiştirilirken
+                    db.run("update zimmetislemleri set tc=? where tc=?", [req.body[zorunsuz[0]], req.body.tc], (err)=>{
+                        if(err) {
+                            return ResErr(res, 500, err.message);
+                        }
+                    })
+                }
+                return ResSuc(res, "Kişi başarıyla düzenlendi")
+            }
+        })
+    }).catch((err)=>ResErr(res,500,err))
 })
 
 app.listen(port, () => {

@@ -388,6 +388,40 @@ app.post("/kisiduzenle", (req,res)=>{
     }).catch((err)=>ResErr(res,500,err))
 })
 
+const kitap_zorunsuz = ["yenikitapadi", "yenibasimyili", "yenisayfasayisi", "yenikategoriler"];
+app.post('/kitapduzenle', async (req, res)=>{
+
+    if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid)) //Gerekenler verilmemişse
+        return ResErr(res, 400, "Girilen bilgiler yanlış");
+    
+    let girisDurumu = await AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).catch(err=>ResErr(res,400,err));
+    if(!girisDurumu) // Giriş başarısızsa
+        return ResErr(res, 400, "Giriş bilgileri yanlış");
+
+    let mevcutkayitlimi = await KitapKayitliMi(req.body.kitapid).catch((err)=>{ResErr(res, 500, err)});
+    if(!mevcutkayitlimi) // Değiştirilmek istenen kitap kayıtlı değilse
+        return ResErr(res, 400, "Kitapid kayıtlı değil");
+
+    let soruisaretleri = [];
+    let aradaki="";
+    kitap_zorunsuz.forEach((va)=>{
+        if(req.body[va]) {
+            aradaki += (aradaki.length === 0 ? "" : ",") + va.substring(4,va.length) + "=?" // zorunsuzdan aldığımız string'in ilk 4 harfini çıkararak değiştirilecek olan sütunu elde ediyoruz.
+            soruisaretleri.push(req.body[va])
+        }
+    })
+    if(aradaki === "")
+        return ResErr(res, 400, "Kullanıcıda değiştirilecek bilgiler girilmemiş")
+    soruisaretleri.push(req.body.kitapid)
+    db.run("update kitaplar set "+aradaki+" where kitapid=?", soruisaretleri, (err)=>{
+        if(err) {
+            ResErr(res, 500, err.message)
+        }else {
+            ResSuc(res, "Başarıyla kitap düzenlendi.")
+        }
+    });
+})
+
 app.listen(port, () => {
     console.log(`http://localhost:${port}`)
 })

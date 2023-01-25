@@ -76,13 +76,21 @@ function KitapKimde(kitapid) {
                 rej(err.message);
             }else {
                 if(rows[0]){
-                    console.log("1 -> ", rows)
                     res(rows[0]["tc"])
                 }else{
-                    console.log("2 -> ", rows)
                     res(false)
                 }
             }
+        })
+    })
+}
+
+function KitapBilgi(kitapid) {
+    return new Promise((res, rej)=>{
+        db.all("select * from kitaplar where kitapid=?", [kitapid], (err, rows)=>{
+            if(err)
+                return rej(err.message);
+            res(rows[0])
         })
     })
 }
@@ -209,7 +217,7 @@ app.get('/kitaplar', (req, res)=>{ // Connection test
 app.post('/kitapkaydet', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", ad: "", basimyil: 2012, sayfa:500, kategori:"macera,gerilim"}
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.ad || !req.body.basimyil || isNaN(req.body.basimyil) || !req.body.sayfa || isNaN(req.body.sayfa) || !req.body.kategori) {
         res.status(400);
-        res.send("Girilen bilgiler yanlış");
+        res.send("Girilen bilgiler yanlış. Kullaniciadi, parola, ad, basimyil, sayfa, kategori girilmek zorundadır; basimyil ve sayfa birer sayı olmak zorundadır");
         return;
     }
     AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
@@ -244,7 +252,7 @@ app.post('/kitapkaydet', (req, res)=>{ // req.body = {kullaniciadi:"", parola:""
 app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", kitapid:1}
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid)) {
         res.status(400);
-        res.send("Girilen bilgiler yanlış");
+        res.send("Girilen bilgiler yanlış. Kullaniciadi, parola ve kitapid girilmek zorundadır, kitapid bir sayı olmalıdır.");
         return;
     }else {
         AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
@@ -285,7 +293,7 @@ app.post('/kitapsil', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", k
 
 app.post('/zimmetle', async (req, res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid) || !req.body.tc || isNaN(req.body.tc) || !req.body.teslimtarihi) {
-        return ResErr(res, 400, "Girilen bilgiler yanlış");
+        return ResErr(res, 400, "Girilen bilgiler yanlış. Kullaniciadi, parola, kitapid, tc ve teslimtarihi girilmek zorundadır; kitapid ve tc birer sayı olmalıdır.");
     }
     AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
         if(v){
@@ -302,7 +310,7 @@ app.post('/zimmetle', async (req, res)=>{
 
 app.post("/teslimet", (req,res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid)) {
-        return ResErr(res, 400, "Girilen bilgiler yanlış");
+        return ResErr(res, 400, "Girilen bilgiler yanlış. Kullaniciadi, parola ve kitapid girilmek zorundadır; kitapid bir sayı olmalıdır.");
     }
     TeslimEt(req.body.kitapid).then(()=>{
         ResSuc(res, "Başarıyla teslim alındı.")
@@ -311,7 +319,7 @@ app.post("/teslimet", (req,res)=>{
 
 app.post("/kisikaydet",(req,res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.tc || isNaN(req.body.tc) || !req.body.isimsoyisim || !req.body.telefon || isNaN(req.body.telefon) || !req.body.okul) {
-        return ResErr(res, 400, "Girilen bilgiler yanlış");
+        return ResErr(res, 400, "Girilen bilgiler yanlış. kullaniciadi, parola, tc, isimsoyisim, telefon, okul girilmelidir; tc ve telefon birer sayı olmalıdır.");
     }
     AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
         if(!v) {
@@ -325,7 +333,7 @@ app.post("/kisikaydet",(req,res)=>{
 
 app.post("/kisisil", (req,res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.tc || isNaN(req.body.tc)) {
-        return ResErr(res, 400, "Girilen bilgiler yanlış");
+        return ResErr(res, 400, "Girilen bilgiler yanlış. kullaniciadi, parola ve tc girilmek zorundadır ve tc sayı olmalıdır.");
     }
     AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then((v)=>{
         if(!v) {
@@ -347,7 +355,7 @@ app.post("/kisisil", (req,res)=>{
 const zorunsuz = ["yenitc", "yeniisimsoyisim", "yenitelefon", "yeniokul"];
 app.post("/kisiduzenle", (req,res)=>{
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.tc || isNaN(req.body.tc)) {
-        return ResErr(res, 400, "Girilen bilgiler yanlış");
+        return ResErr(res, 400, "Girilen bilgiler yanlış. kullaniciadi, parola, tc girmek zorunludur ve tc bir sayı olmalıdır.");
     }
     AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).then(async (v)=>{
         if(!v) {
@@ -366,7 +374,7 @@ app.post("/kisiduzenle", (req,res)=>{
             }
         })
         if(aradaki === "") {
-            return ResErr(res, 400, "Kullanıcıda değiştirilecek bilgiler girilmemiş")
+            return ResErr(res, 400, "Kullanıcıda değiştirilecek bilgiler girilmemiş. En azından yenitc, yeniisimsoyisim, yenitelefon veya yeniokul girilmelidir. İstenilirse birkaçı veya hepsini girebilirsiniz.")
         }
         soruisaretleri.push(req.body.tc);
         db.run("update kullanicilar set "+aradaki+" where tc=?", soruisaretleri, (err)=>{
@@ -392,7 +400,7 @@ const kitap_zorunsuz = ["yenikitapadi", "yenibasimyili", "yenisayfasayisi", "yen
 app.post('/kitapduzenle', async (req, res)=>{
 
     if(!req.body.kullaniciadi || !req.body.parola || !req.body.kitapid || isNaN(req.body.kitapid)) //Gerekenler verilmemişse
-        return ResErr(res, 400, "Girilen bilgiler yanlış");
+        return ResErr(res, 400, "Girilen bilgiler yanlış. Kullaniciadi, parola, kitapid zorunludur ve kitapid bir sayı olmalıdır.");
     
     let girisDurumu = await AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).catch(err=>ResErr(res,400,err));
     if(!girisDurumu) // Giriş başarısızsa
@@ -420,6 +428,19 @@ app.post('/kitapduzenle', async (req, res)=>{
             ResSuc(res, "Başarıyla kitap düzenlendi.")
         }
     });
+});
+
+app.post('/kitapbilgi', async (req,res)=>{ // Sadece kitapid gerekiyor
+    if(!req.body.kitapid || isNaN(req.body.kitapid))
+        return ResErr(res, 400, "Girilen bilgiler yanlış. Kitapid girilmelidir ve bir sayı olmalıdır.")
+    if(!(await KitapKayitliMi(req.body.kitapid)))
+        return ResErr(res, 400, "Girilen kitapid kayıtlı değil.")
+    let bilgi = await KitapBilgi(req.body.kitapid).catch(err=>ResErr(res, 500, err));
+    if(bilgi) {
+        let kimde = await KitapKimde(req.body.kitapid).catch(err=>ResErr(res, 500, err));
+        bilgi.kimde = kimde;
+        ResSuc(res, bilgi);
+    }
 })
 
 app.listen(port, () => {

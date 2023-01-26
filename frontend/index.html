@@ -3,9 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        .invisible {
+            position: absolute;
+            left: -9999px;
+        }
+    </style>
+    <script src="bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="bootstrap.min.css">
     <title>Kütüphane sistemi</title>
 </head>
 <body>
     
+    <nav class="navbar bg-body-tertiary">
+        <div class="container-fluid justify-content-start">
+            <a class="navbar-brand">Kütüphane</a>
+            <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                Giriş yapın
+            </button>
+            <form class="dropdown-menu p-4">
+                <div class="mb-3">
+                    <label for="kullaniciadi_input" class="form-label">Kullanıcı adı:</label>
+                    <input type="text" class="form-control" id="kullaniciadi_input">
+                </div>
+                <div class="mb-3">
+                    <label for="parola_input" class="form-label">Parola:</label>
+                    <input type="password" class="form-control" id="parola_input">
+                </div>
+                <button type="button" class="btn btn-primary" id="giris">Giriş yap</button>
+            </form>
+            <span class="mx-3" id="kullaniciadi_span"></span>
+            <button type="button" class="btn btn-danger m-2 invisible" id="cikisyap">Çıkış yap</button>
+            <ul class="nav nav-tabs">
+                <li class="nav-item" id="tabbutton1">
+                    <a class="nav-link active" aria-current="page">Kitaplar</a>
+                </li>
+                <li class="nav-item" id="tabbutton2">
+                    <a class="nav-link">Kitap kaydet</a>
+                </li>
+                <li class="nav-item" id="tabbutton3">
+                    <a class="nav-link">Zimmetle/Teslim et</a>
+                </li>
+                <li class="nav-item" id="tabbutton4">
+                    <a class="nav-link">Kullanıcılar</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    
+    <div id="liveAlertPlaceholder"></div>
+    <div id="tab1">
+        <div class="input-group mb-1">
+            <input type="text" class="form-control" placeholder="kitap ismi" aria-label="Recipient's username" aria-describedby="button-addon2">
+            <button class="btn btn-outline-secondary" type="button" id="kitap_ara">Ara</button>
+        </div>
+        <button type="button" class="btn btn-secondary" id="kitaplar_yenile">Yenile</button>
+        <table class="table">
+            <thead>
+              <tr >
+                <th scope="col">Kitap id</th>
+                <th scope="col">Kitap adı</th>
+                <th scope="col">Basım yılı</th>
+                <th scope="col">Sayfa sayısı</th>
+                <th scope="col">Kategoriler</th>
+              </tr>
+            </thead>
+            <tbody id="k_tablo">
+                <tr class="invisible" id="sample">
+                    <th scope="row">0</th>
+                    <td>Mark</td>
+                    <td>Otto</td>
+                    <td>@mdo</td>
+                    <td>@mdo</td>
+                  </tr>
+            </tbody>
+          </table>
+    </div>
+    <div class="invisible" id="tab2">
+        <div class="p-2">
+            <div class="input-group mb-3">
+                <span class="input-group-text" id="basic-addon1">Kitap adı:</span>
+                <input type="text" class="form-control" id="kaydet_kadi">
+            </div>
+            <div class="input-group mb-3">
+                <span class="input-group-text" id="basic-addon1">Basım yılı:</span>
+                <input type="text" class="form-control" id="kaydet_yil">
+            </div>
+            <div class="input-group mb-3">
+                <span class="input-group-text" id="basic-addon1">Sayfa sayısı:</span>
+                <input type="text" class="form-control" id="kaydet_sayfa">
+            </div>
+            <div class="input-group mb-3">
+                <span class="input-group-text" id="basic-addon1">Kategorileri:</span>
+                <input type="text" class="form-control" id="kaydet_kategori">
+            </div>
+            <button type="button" class="btn btn-primary" id="kaydet_buton">Kaydet</button>
+        </div>
+    </div>
+    <div class="invisible" id="tab3">3</div>
+    <div class="invisible" id="tab4">4</div>
+    <script src="./communicate.js"></script>
+    <script src="./frontend-utils.js"></script>
 </body>
 </html>

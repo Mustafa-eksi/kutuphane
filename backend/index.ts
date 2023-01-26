@@ -8,6 +8,9 @@ const db = new sql.Database("./kutuphane.db", sql.OPEN_READWRITE, (err: any)=>{
 });
 const debugMode = true;
 
+const cors = require("cors")
+app.use(cors())
+
 app.use(express.json());
 
 function kitapkaydet(ad: string, basimyil: number, sayfa: number, kategori: string) {
@@ -34,7 +37,7 @@ function kitaplarigor() {
     })
 }
 
-function AuthenticateAsAdmin(kullaniciadi:string, parola:string) {
+function AuthenticateAsAdmin(kullaniciadi:string, parola:string): Promise<boolean> {
     return new Promise((res,rej)=>{
         db.all("select count(*) from adminler where kullaniciadi=? and parola=?", [kullaniciadi, parola], (err,rows)=>{
             if(err) {
@@ -213,6 +216,12 @@ app.get('/kitaplar', (req, res)=>{ // Connection test
             return;
         }
     })
+})
+
+app.post('/auth', async (req, res)=>{
+    if(!req.body.kullaniciadi || !req.body.parola)
+        return ResErr(res, 400, "Girilen bilgiler yanlış. Kullaniciadi ve parola girilmek zorundadır.")
+    ResSuc(res, await AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).catch((err)=>ResErr(res, 500, err)) ? "Başarılı" : "Başarısız");
 })
 
 app.post('/kitapkaydet', (req, res)=>{ // req.body = {kullaniciadi:"", parola:"", ad: "", basimyil: 2012, sayfa:500, kategori:"macera,gerilim"}

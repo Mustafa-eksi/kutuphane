@@ -19,6 +19,8 @@ const db = new sql.Database("./kutuphane.db", sql.OPEN_READWRITE, (err) => {
         return console.error(err.message);
 });
 const debugMode = true;
+const cors = require("cors");
+app.use(cors());
 app.use(express.json());
 function kitapkaydet(ad, basimyil, sayfa, kategori) {
     return new Promise((res, rej) => {
@@ -229,6 +231,11 @@ app.get('/kitaplar', (req, res) => {
         }
     });
 });
+app.post('/auth', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!req.body.kullaniciadi || !req.body.parola)
+        return ResErr(res, 400, "Girilen bilgiler yanlış. Kullaniciadi ve parola girilmek zorundadır.");
+    ResSuc(res, (yield AuthenticateAsAdmin(req.body.kullaniciadi, req.body.parola).catch((err) => ResErr(res, 500, err))) ? "Başarılı" : "Başarısız");
+}));
 app.post('/kitapkaydet', (req, res) => {
     if (!req.body.kullaniciadi || !req.body.parola || !req.body.ad || !req.body.basimyil || isNaN(req.body.basimyil) || !req.body.sayfa || isNaN(req.body.sayfa) || !req.body.kategori) {
         res.status(400);

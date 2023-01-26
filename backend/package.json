@@ -4,11 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx tsc",
+    "start": "npx tsc && node index.js"
   },
   "author": "Mustafa Ekşi",
   "license": "MIT",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
     "sqlite3": "^5.1.4",
     "typescript-require": "^0.3.0"

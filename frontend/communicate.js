@@ -1,4 +1,10 @@
+const kitaplar_tablo = document.querySelector("#k_tablo");
+const kitaplar_s = document.querySelector("#sample");
+const tabloreset = kitaplar_tablo.innerHTML;
+
 async function BackendPost(endpoint, body) {
+    body.kullaniciadi = localStorage.kullaniciadi;
+    body.parola = localStorage.parola;
     return await fetch('http://localhost:8080/'+endpoint, {
         method:'POST', mode:'cors',
         headers: {'Content-Type': 'application/json'},
@@ -23,7 +29,12 @@ async function GirisYap(kullaniciadi, parola) {
     }).then(res=>res.text());
 }
 
+async function KitapSil(kitapid) {
+    return await BackendPost('kitapsil', {kitapid:kitapid})
+}
+
 function KitaplariGoster() {
+    kitaplar_tablo.innerHTML = tabloreset;
     KitaplariGetir().then((v)=>{
         if(!v)
             return alertb("Kitaplar getirilemedi", "danger");
@@ -33,9 +44,20 @@ function KitaplariGoster() {
             kitaplar_tablo.appendChild(a);
             let satirimiz = kitaplar_tablo.children[i+1];
             satirimiz.classList.remove("invisible")
-            for(let i2 = 0; i2 < satirimiz.children.length; i2++) {
+            for(let i2 = 0; i2 < satirimiz.children.length-1; i2++) {
                 satirimiz.children[i2].textContent = e[keys[i2]];
             }
+            //console.log(satirimiz.children, i);
+            //return;
+            satirimiz.children[satirimiz.children.length-1].children[0].addEventListener('click', async()=> {
+                KitapSil(e.kitapid).then((v)=>{
+                    alertb("Kitap başarıyla silindi", "success");
+                    KitaplariGoster();
+                }).catch((err)=>{
+                    alertb("HATA: "+err.message, 'danger')
+                    console.error(err)
+                })
+            })
         });
     })
 }
@@ -60,8 +82,7 @@ giris_buton.addEventListener('click', async ()=>{
 
 // TAB1
 // KİTAPLAR
-const kitaplar_tablo = document.querySelector("#k_tablo");
-const kitaplar_s = document.querySelector("#sample");
+
 KitaplariGoster();
 
 const kitaplar_yenile = document.querySelector("#kitaplar_yenile");

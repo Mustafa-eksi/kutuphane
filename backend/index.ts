@@ -125,17 +125,17 @@ function Zimmetle(kullaniciadi:string, parola:string, tc:number, kitapid:number,
     return new Promise((res:(any),rej)=>{
         AuthenticateAsAdmin(kullaniciadi, parola).then((v1)=>{
             if(!v1) return rej("Giriş bilgileri yanlış.")
-            KitapKayitliMi(kitapid).then((v2)=>{
-                if(!v2) return rej("Kitap kayıtlı değil.")
-                if(sil === true) {//silme işlemini zimmet işlemine dönüştürmek için tcyi sıfır teslimtarihini null giriyorum
-                    db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (0,?,?,NULL,'silindi')", [kitapid, new Date(Date.now()).toLocaleString()], (err)=>{
-                        if(err) {
-                            rej(err);
-                        }else{
-                            res()
-                        }
-                    })
-                }else {
+            if(sil === true) {//silme işlemini zimmet işlemine dönüştürmek için tcyi sıfır teslimtarihini null giriyorum
+                db.run("insert into zimmetislemleri (tc,kitapid,verilmetarihi,teslimtarihi,teslimdurumu) values (0,?,?,NULL,'silindi')", [kitapid, new Date(Date.now()).toLocaleString()], (err)=>{
+                    if(err) {
+                        rej(err);
+                    }else{
+                        res()
+                    }
+                })
+            }else {
+                KitapKayitliMi(kitapid).then((v2)=>{
+                    if(!v2) return rej("Kitap kayıtlı değil.")
                     KullaniciKayitliMi(tc).then((v3)=>{
                         if(!v3) return rej("Kullanıcı kayıtlı değil")
                         KitapKimde(kitapid).then((v4)=>{
@@ -153,8 +153,8 @@ function Zimmetle(kullaniciadi:string, parola:string, tc:number, kitapid:number,
                             }
                         })
                     }).catch((err)=>{rej(err)})
-                }
-            }).catch((err)=>{if(err) {rej(err)}})
+                }).catch((err)=>{if(err) {rej(err)}})
+            }
         }).catch((err)=>{
             if(err) {
                 rej(err);
